@@ -43,6 +43,45 @@ class CategoryRepository extends ServiceEntityRepository
                   ->getResult();
     }
 
+    public function findByLevel(int $level): array
+    {
+        return $this->createQueryBuilder('c')
+            ->where('c.level = :level')
+            ->setParameter('level', $level)
+            ->orderBy('c.sortOrder', 'ASC')
+            ->addOrderBy('c.name', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    public function buildHierarchicalTree(): array
+    {
+        // one findAll, children wired up by reference
+        $categories = $this->findAll();
+        $tree = [];
+        $lookup = [];
+
+        foreach ($categories as $category) {
+            $lookup[$category->getId()] = [
+                'category' => $category,
+                'children' => [],
+            ];
+        }
+
+        foreach ($categories as $category) {
+            if ($category->getParent() === null) {
+                $tree[$category->getId()] = &$lookup[$category->getId()];
+            } else {
+                $parentId = $category->getParent()->getId();
+                if (isset($lookup[$parentId])) {
+                    $lookup[$parentId]['children'][$category->getId()] = &$lookup[$category->getId()];
+                }
+            }
+        }
+
+        return $tree;
+    }
+
     public function findByNameLike(string $searchTerm): array
     {
         return $this->createQueryBuilder('c')
@@ -51,6 +90,34 @@ class CategoryRepository extends ServiceEntityRepository
             ->orderBy('c.name', 'ASC')
             ->getQuery()
             ->getResult();
+    }
+
+    public function getCategoryStats(): array
+    {
+        $total = $this->createQueryBuilder('c')
+            ->select('COUNT(c.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $root = $this->createQueryBuilder('c')
+            ->select('COUNT(c.id)')
+            ->where('c.parent IS NULL')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $leaf = $this->createQueryBuilder('c')
+            ->select('COUNT(c.id)')
+            ->leftJoin('c.children', 'children')
+            ->where('children.id IS NULL')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return [
+            'total' => $total,
+            'root' => $root,
+            'leaf' => $leaf,
+            'branch' => $total - $leaf,
+        ];
     }
 
     public function save(Category $entity, bool $flush = false): void
