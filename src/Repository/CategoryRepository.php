@@ -82,14 +82,24 @@ class CategoryRepository extends ServiceEntityRepository
         return $tree;
     }
 
+    // filtered in php: mb_strtolower folds cyrillic, LIKE does not unless the collation says so
     public function findByNameLike(string $searchTerm): array
     {
-        return $this->createQueryBuilder('c')
-            ->where('LOWER(c.name) LIKE :term')
-            ->setParameter('term', '%' . mb_strtolower($searchTerm) . '%')
+        $all = $this->createQueryBuilder('c')
             ->orderBy('c.name', 'ASC')
             ->getQuery()
             ->getResult();
+
+        $needle = mb_strtolower($searchTerm);
+        $results = [];
+
+        foreach ($all as $category) {
+            if (mb_strpos(mb_strtolower($category->getName()), $needle) !== false) {
+                $results[] = $category;
+            }
+        }
+
+        return $results;
     }
 
     public function getCategoryStats(): array
