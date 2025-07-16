@@ -5,11 +5,13 @@ namespace App\Entity;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'attribute')]
 #[ORM\HasLifecycleCallbacks]
+#[UniqueEntity(fields: ['code'], message: 'attribute_code_already_exists', ignoreNull: true)]
 class Attribute
 {
     #[ORM\Id]
@@ -19,7 +21,12 @@ class Attribute
 
     #[ORM\Column(type: 'string', length: 255)]
     #[Assert\NotBlank(message: 'attribute_name_required')]
+    #[Assert\Length(max: 255, maxMessage: 'attribute_name_too_long')]
     private ?string $name = null;
+
+    #[ORM\Column(type: 'string', length: 255, nullable: true, unique: true)]
+    #[Assert\Length(max: 255, maxMessage: 'attribute_code_too_long')]
+    private ?string $code = null;
 
     #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $sortOrder = null;
@@ -53,6 +60,17 @@ class Attribute
     public function setName(string $name): static
     {
         $this->name = $name;
+        return $this;
+    }
+
+    public function getCode(): ?string
+    {
+        return $this->code;
+    }
+
+    public function setCode(?string $code): static
+    {
+        $this->code = $code;
         return $this;
     }
 
@@ -94,6 +112,17 @@ class Attribute
         if (!$this->values->contains($value)) {
             $this->values->add($value);
             $value->setAttribute($this);
+        }
+
+        return $this;
+    }
+
+    public function removeValue(AttributeValue $value): static
+    {
+        if ($this->values->removeElement($value)) {
+            if ($value->getAttribute() === $this) {
+                $value->setAttribute(null);
+            }
         }
 
         return $this;
