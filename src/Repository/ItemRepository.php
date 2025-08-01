@@ -48,6 +48,25 @@ class ItemRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    public function existsCombination(Line $line, Audience $audience, Context $context, ?Item $exclude = null): bool
+    {
+        $qb = $this->createQueryBuilder('i')
+            ->select('COUNT(i.id)')
+            ->where('i.line = :line')
+            ->andWhere('i.audience = :audience')
+            ->andWhere('i.context = :context')
+            ->setParameter('line', $line)
+            ->setParameter('audience', $audience)
+            ->setParameter('context', $context);
+
+        if ($exclude) {
+            $qb->andWhere('i.id != :exclude')
+                ->setParameter('exclude', $exclude->getId());
+        }
+
+        return $qb->getQuery()->getSingleScalarResult() > 0;
+    }
+
     public function getItemStats(): array
     {
         $total = $this->createQueryBuilder('i')
@@ -83,5 +102,39 @@ class ItemRepository extends ServiceEntityRepository
             ->addOrderBy('c.name', 'ASC')
             ->getQuery()
             ->getResult();
+    }
+
+    // mb_* in php for the same reason as CategoryRepository::findByNameLike
+    public function searchByName(string $query, int $limit = 10): array
+    {
+        $all = $this->createQueryBuilder('i')
+            ->select('i', 'l', 'a', 'c')
+            ->join('i.line', 'l')
+            ->join('i.audience', 'a')
+            ->join('i.context', 'c')
+            ->orderBy('l.name', 'ASC')
+            ->addOrderBy('a.name', 'ASC')
+            ->addOrderBy('c.name', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        $needle = mb_strtolower($query);
+        $results = [];
+
+        foreach ($all as $item) {
+            if (count($results) >= $limit) {
+                break;
+            }
+
+            $lineMatch = mb_strpos(mb_strtolower($item->getLine()->getName()), $needle) !== false;
+            $audienceMatch = mb_strpos(mb_strtolower($item->getAudience()->getName()), $needle) !== false;
+            $contextMatch = mb_strpos(mb_strtolower($item->getContext()->getName()), $needle) !== false;
+
+            if ($lineMatch || $audienceMatch || $contextMatch) {
+                $results[] = $item;
+            }
+        }
+
+        return $results;
     }
 }
