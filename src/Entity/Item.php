@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\ItemRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -32,6 +34,9 @@ class Item
     #[Assert\NotNull(message: 'context_required')]
     private ?Context $context = null;
 
+    #[ORM\OneToMany(mappedBy: 'item', targetEntity: ItemCategory::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
+    private Collection $itemCategories;
+
     #[ORM\Column(type: 'datetime')]
     private ?\DateTimeInterface $createdAt = null;
 
@@ -40,6 +45,7 @@ class Item
 
     public function __construct()
     {
+        $this->itemCategories = new ArrayCollection();
         $this->createdAt = new \DateTime();
         $this->updatedAt = new \DateTime();
     }
@@ -110,13 +116,60 @@ class Item
         return $this;
     }
 
+    public function getDisplayName(): string
+    {
+        $parts = [];
+        if ($this->line) {
+            $parts[] = $this->line->getName();
+        }
+        if ($this->audience) {
+            $parts[] = $this->audience->getName();
+        }
+        if ($this->context) {
+            $parts[] = $this->context->getName();
+        }
+
+        return implode(' - ', $parts);
+    }
+
     public function __toString(): string
     {
-        return trim(sprintf(
-            '%s - %s - %s',
-            $this->line?->getName(),
-            $this->audience?->getName(),
-            $this->context?->getName()
-        ));
+        return $this->getDisplayName();
+    }
+
+    /**
+     * @return Collection<int, ItemCategory>
+     */
+    public function getItemCategories(): Collection
+    {
+        return $this->itemCategories;
+    }
+
+    public function addItemCategory(ItemCategory $itemCategory): static
+    {
+        if (!$this->itemCategories->contains($itemCategory)) {
+            $this->itemCategories->add($itemCategory);
+            $itemCategory->setItem($this);
+        }
+
+        return $this;
+    }
+
+    public function removeItemCategory(ItemCategory $itemCategory): static
+    {
+        if ($this->itemCategories->removeElement($itemCategory)) {
+            if ($itemCategory->getItem() === $this) {
+                $itemCategory->setItem(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getItemCategoriesForSegment(string $segment): array
+    {
+        return $this->itemCategories->filter(
+            fn (ItemCategory $itemCategory) => $itemCategory->getSegment() === $segment
+        )->toArray();
     }
 }
